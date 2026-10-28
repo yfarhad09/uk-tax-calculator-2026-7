@@ -2,21 +2,27 @@ from decimal import Decimal
 
 class TaxReturn:
 
-    personal_allowance = 12570
-    basic_rate = Decimal('0.2')
-    basic_rate_band = 37700
-    higher_rate = Decimal('0.4')
-    higher_rate_band = 50271
-    additional_rate = Decimal('0.45')
-    additional_rate_band = 125141
+    tax_rates = {
+                "additional_rate_band" : [Decimal('0.45'), 125140],
+                "higher_rate_band" : [Decimal('0.4'), 50270],
+                "basic_rate_band" : [Decimal('0.2'), 12570]
+        }
+
+    ni_rates = {
+        "basic_rate_band" : [Decimal('0.09'), 12570],
+        "additional_rate" : [Decimal('0.02'), 50270]
+    }
 
     #Set instance variables for later methods
-    def __init__(self, income, expenses, capital_allowances, profit = 0, taxable_profit = 0):
+    def __init__(self, income, expenses, capital_allowances, tax_liability = 0, ni_liability = 0, profit = 0, personal_allowance = 12570, tax_rates):
         self.income = income
         self.expenses = expenses
         self.capital_allowances = capital_allowances
         self.profit = profit
-        self.taxable_profit = taxable_profit
+        self.personal_allowance = personal_allowance
+        self.tax_liability = tax_liability
+        self.ni_liability = ni_liability
+        self.tax_rates = tax_rates
 
     #Receives user input, calculates proft before allowances
     def calculate_profit(self):
@@ -26,53 +32,31 @@ class TaxReturn:
         print(f'Your profit is: {self.profit}')
         return self.profit
     
-    #Takes in profit and deducts personal allowance to calculate taxable income
-    def calculate_taxable_profit(self): 
-        if self.personal_allowance < 0:
-            self.personal_allowance = 0
-        self.taxable_profit = self.profit - self.personal_allowance
-        if self.taxable_profit <= 0:
-            self.taxable_profit = 0
-        print(f'Your taxable profit is: {self.taxable_profit}')
-        return self.taxable_profit
     
     #Elif statements compare taxable profit against tax bands and applies relevant rates
     def calculate_tax(self):
-        tax_liability = 0
-        if self.taxable_profit == 0:
-            tax_liability = 0
-        elif self.taxable_profit > self.additional_rate_band:
-            tax_liability += self.basic_rate_band * self.basic_rate
-            tax_liability += (self.additional_rate_band - self.basic_rate_band) * self.higher_rate
-            tax_liability += (self.taxable_profit - self.additional_rate_band) * self.additional_rate
-        elif self.taxable_profit >= self.basic_rate_band:
-            tax_liability += (self.basic_rate_band * self.basic_rate)
-            tax_liability += (self.taxable_profit - self.basic_rate_band) * self.higher_rate
-        else: 
-            tax_liability = self.taxable_profit * self.basic_rate
+        taxable_profit = self.profit - self.personal_allowance
+        for band, value in self.tax_rates.items():
+            if taxable_profit > value[1]:
+                tax_liability += (taxable_profit * value[0])
+                taxable_profit -= (taxable_profit - self.tax_rates[value[1]]
         print(f'Your Income Tax liability is: {tax_liability}')
-        return tax_liability
+        return self.tax_liability
     
     #Elif statements compare taxable profit against NI bands and applies relevant rates
     def calculate_class4_ni(self):
-        ni_liability = 0
-        basic_rate = Decimal('0.09')
-        additional = Decimal('0.02')
-        basic_rate_band = 12570
-        upper_limit = 50270
-        self.taxable_profit = Decimal(str(self.taxable_profit))
-        if self.taxable_profit > upper_limit:
-            ni_liability += (upper_limit - basic_rate_band) * basic_rate
-            ni_liability += (self.taxable_profit - upper_limit) * additional
-        elif self.taxable_profit > basic_rate_band and self.taxable_profit < upper_limit:
-            ni_liability += (self.taxable_profit - basic_rate_band) * basic_rate
-        print(f'Your Class 4 National Insurance Liability is: {ni_liability}')
-        return ni_liability
+        if self.profit > self.ni_rates['upper_limit']:
+            self.ni_liability += (self.ni_rates['upper_limit'] - self.ni_rates['basic_rate_band']) * self.ni_rates['basic_rate']
+            self.ni_liability += (self.profit - self.ni_rates['upper_limit'] * self.ni_rates['additional'])
+        elif self.profit > self.ni_rates['basic_rate_band'] and self.profit < self.ni_rates['upper_limit']:
+            self.ni_liability += (self.profit - self.ni_rates['basic_rate_band'] * self.ni_rates['basic_rate'])
+        print(f'Your Class 4 National Insurance Liability is: {self.ni_liability}')
+        return self.ni_liability
     
     #Totals NI and income tax to return user's tax liability based on user inputs
     def total_tax_liability(self):
         self.calculate_profit()
-        taxable_profit = self.calculate_taxable_profit()
+        taxable_profit = self.calculate_profit() - self.personal_allowance
         income_tax = self.calculate_tax()
         ni = self.calculate_class4_ni()
         total_liability = income_tax + ni
