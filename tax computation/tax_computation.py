@@ -2,77 +2,70 @@ from decimal import Decimal
 
 class TaxReturn:
 
-    personal_allowance = 12570
-    basic_rate = Decimal('0.2')
-    basic_rate_band = 37700
-    higher_rate = Decimal('0.4')
-    higher_rate_band = 50271
-    additional_rate = Decimal('0.45')
-    additional_rate_band = 125141
-
     #Set instance variables for later methods
-    def __init__(self, income, expenses, capital_allowances, profit = 0, taxable_profit = 0):
+    def __init__(self, income, expenses, capital_allowances):
         self.income = income
         self.expenses = expenses
         self.capital_allowances = capital_allowances
-        self.profit = profit
-        self.taxable_profit = taxable_profit
+
+        self.profit = 0
+        self.personal_allowance = 12570
+        self.tax_liability = 0
+        self.ni_liability = 0
+
+        self.tax_rates = {
+                        "additional_rate_band" : [Decimal('0.45'), 125140],
+                        "higher_rate_band" : [Decimal('0.4'), 50270],
+                        "basic_rate_band" : [Decimal('0.2'), self.personal_allowance],
+                }
+        self.ni_rates = {
+                "additional_rate" : [Decimal('0.02'), 50270],
+                "basic_rate_band" : [Decimal('0.06'), 12570]
+            }
+        self.basic_band_width = self.tax_rates["higher_rate_band"][1] - self.tax_rates["basic_rate_band"][1]
 
     #Receives user input, calculates proft before allowances
     def calculate_profit(self):
         self.profit = (self.income - (self.expenses + self.capital_allowances))
-        if self.profit > 100000:
-            self.personal_allowance -= (self.profit - 100000) // 2
         print(f'Your profit is: {self.profit}')
         return self.profit
+
+    #Calculates personal allowance taper where income is above £100,000
+    def calculate_allowance(self):
+        allowance = self.personal_allowance
+        if self.profit > 100000:
+            allowance -= (self.profit - 100000) // 2
+        if allowance < 0:
+            allowance = 0
+        self.personal_allowance = allowance
+        return self.personal_allowance
     
-    #Takes in profit and deducts personal allowance to calculate taxable income
-    def calculate_taxable_profit(self): 
-        if self.personal_allowance < 0:
-            self.personal_allowance = 0
-        self.taxable_profit = self.profit - self.personal_allowance
-        if self.taxable_profit <= 0:
-            self.taxable_profit = 0
-        print(f'Your taxable profit is: {self.taxable_profit}')
-        return self.taxable_profit
-    
-    #Elif statements compare taxable profit against tax bands and applies relevant rates
+    #For loop compares taxable profit against tax bands and applies relevant rates
     def calculate_tax(self):
-        tax_liability = 0
-        if self.taxable_profit == 0:
-            tax_liability = 0
-        elif self.taxable_profit > self.additional_rate_band:
-            tax_liability += self.basic_rate_band * self.basic_rate
-            tax_liability += (self.additional_rate_band - self.basic_rate_band) * self.higher_rate
-            tax_liability += (self.taxable_profit - self.additional_rate_band) * self.additional_rate
-        elif self.taxable_profit >= self.basic_rate_band:
-            tax_liability += (self.basic_rate_band * self.basic_rate)
-            tax_liability += (self.taxable_profit - self.basic_rate_band) * self.higher_rate
-        else: 
-            tax_liability = self.taxable_profit * self.basic_rate
-        print(f'Your Income Tax liability is: {tax_liability}')
-        return tax_liability
+        remaining = self.profit
+        self.tax_rates["basic_rate_band"][1] = self.personal_allowance
+        self.tax_rates["higher_rate_band"][1] = self.personal_allowance + self.basic_band_width
+        for band, value in self.tax_rates.items():
+            if remaining >= value[1]:
+                self.tax_liability += ((remaining - self.tax_rates[band][1]) * self.tax_rates[band][0])
+                remaining -= (remaining - self.tax_rates[band][1])
+        print(f'Your Income Tax liability is: {self.tax_liability}')
+        return self.tax_liability
     
-    #Elif statements compare taxable profit against NI bands and applies relevant rates
+    #For loop compares taxable profit against NI bands and applies relevant rates
     def calculate_class4_ni(self):
-        ni_liability = 0
-        basic_rate = Decimal('0.09')
-        additional = Decimal('0.02')
-        basic_rate_band = 12570
-        upper_limit = 50270
-        self.taxable_profit = Decimal(str(self.taxable_profit))
-        if self.taxable_profit > upper_limit:
-            ni_liability += (upper_limit - basic_rate_band) * basic_rate
-            ni_liability += (self.taxable_profit - upper_limit) * additional
-        elif self.taxable_profit > basic_rate_band and self.taxable_profit < upper_limit:
-            ni_liability += (self.taxable_profit - basic_rate_band) * basic_rate
-        print(f'Your Class 4 National Insurance Liability is: {ni_liability}')
-        return ni_liability
+        remaining = self.profit
+        for band, value in self.ni_rates.items():
+            if remaining >= value[1]:
+                self.ni_liability += ((remaining - self.ni_rates[band][1]) * self.ni_rates[band][0])
+                remaining -= (remaining - self.ni_rates[band][1])
+        print(f'Your Class 4 National Insurance Liability is: {self.ni_liability}')
+        return self.ni_liability
     
     #Totals NI and income tax to return user's tax liability based on user inputs
     def total_tax_liability(self):
         self.calculate_profit()
-        taxable_profit = self.calculate_taxable_profit()
+        self.calculate_allowance()
         income_tax = self.calculate_tax()
         ni = self.calculate_class4_ni()
         total_liability = income_tax + ni
